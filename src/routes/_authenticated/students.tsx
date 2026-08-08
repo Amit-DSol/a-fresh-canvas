@@ -381,9 +381,9 @@ function AddStudentDialog({ classes, onDone }: { classes: any[]; onDone: () => v
             <Select value={f.gender} onValueChange={(v) => set("gender", v)}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="male">Male</SelectItem>
-                <SelectItem value="female">Female</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
+                <SelectItem value="Male">Male</SelectItem>
+                <SelectItem value="Female">Female</SelectItem>
+                <SelectItem value="Other">Other</SelectItem>
               </SelectContent>
             </Select>
           </Field>
@@ -403,7 +403,7 @@ function AddStudentDialog({ classes, onDone }: { classes: any[]; onDone: () => v
           <Field label="Phone"><Input value={f.father_phone} onChange={(e) => set("father_phone", e.target.value)} /></Field>
         </div>
         <p className="text-xs text-muted-foreground pt-2">
-          Each person with an email will get an invite to set their own password.
+          Each guardian can set their password the first time they log in.
         </p>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
