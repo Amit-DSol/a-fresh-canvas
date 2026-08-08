@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { normalizeGender } from "@/lib/gender";
 
 async function hasAnyRole(supabase: any, userId: string, roles: string[]) {
   for (const r of roles) {
@@ -225,7 +226,7 @@ export const createStudent = createServerFn({ method: "POST" })
         admission_number: data.admission_number || null,
         roll_number: data.roll_number || null,
         date_of_birth: data.date_of_birth || null,
-        gender: data.gender || null,
+        gender: normalizeGender(data.gender),
       })
       .select()
       .single();
@@ -290,6 +291,7 @@ export const updateStudent = createServerFn({ method: "POST" })
       }
     }
     const { id, ...rest } = data;
+    if (rest.gender !== undefined) rest.gender = normalizeGender(rest.gender);
     const { error } = await supabaseAdmin.from("students").update(rest).eq("id", id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -547,7 +549,7 @@ export const importStudents = createServerFn({ method: "POST" })
           admission_number: r.admission_number || null,
           roll_number: r.roll_number || null,
           date_of_birth: r.date_of_birth || null,
-          gender: r.gender || null,
+          gender: normalizeGender(r.gender),
         });
         okRows.push(r);
       } catch (e: any) {
