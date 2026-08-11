@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChevronRight } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -63,7 +64,17 @@ function ChildBlock({ child }: { child: any }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{child.profile?.full_name} <span className="text-sm font-normal text-muted-foreground">· {child.classes?.name} {child.classes?.section} · Roll {child.roll_number ?? "—"}</span></CardTitle>
+        <CardTitle>
+          <Link
+            to="/student"
+            search={{ student: child.id }}
+            className="group flex items-center gap-1 hover:text-primary transition-colors"
+          >
+            <span className="underline-offset-4 group-hover:underline">{child.profile?.full_name}</span>
+            <span className="text-sm font-normal text-muted-foreground">· {child.classes?.name} {child.classes?.section} · Roll {child.roll_number ?? "—"}</span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+          </Link>
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-4 gap-3">

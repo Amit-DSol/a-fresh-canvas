@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, MessageSquare, ChevronLeft, ChevronRight } from "lucide-react";
+import { Download, MessageSquare, ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { myAttendance } from "@/lib/attendance.functions";
 import { myResults } from "@/lib/exams.functions";
@@ -13,7 +13,12 @@ import { myClassHomework } from "@/lib/homework.functions";
 import { myStudentInfo } from "@/lib/student.functions";
 import { useMe } from "@/hooks/use-me";
 
-export const Route = createFileRoute("/_authenticated/student")({ component: StudentPortal });
+export const Route = createFileRoute("/_authenticated/student")({
+  validateSearch: (search: Record<string, unknown>): { student?: string } => ({
+    student: typeof search.student === "string" && search.student ? search.student : undefined,
+  }),
+  component: StudentPortal,
+});
 
 function iso(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -24,13 +29,22 @@ function initials(name: string) {
 
 function StudentPortal() {
   const { data: me } = useMe();
+  const { student: childId } = Route.useSearch();
   const infoFn = useServerFn(myStudentInfo);
   const attFn = useServerFn(myAttendance);
   const resFn = useServerFn(myResults);
   const hwFn = useServerFn(myClassHomework);
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  const infoQ = useQuery({ queryKey: ["my-student-info"], queryFn: () => infoFn() });
+  const infoQ = useQuery({
+    queryKey: ["my-student-info", childId ?? "self"],
+    queryFn: () => infoFn({ data: childId ? { student_id: childId } : {} }),
+  });
+  const denied = (infoQ.data as any)?.denied === true;
+  const info: any = denied ? null : infoQ.data;
+  const childProfileId: string | undefined = childId ? info?.profile_id : undefined;
+  const scoped = childId ? { student_profile_id: childProfileId } : {};
+  const dataEnabled = childId ? !!childProfileId : true;
 
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
@@ -40,11 +54,20 @@ function StudentPortal() {
   const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
 
   const attQ = useQuery({
-    queryKey: ["my-att", iso(monthStart), iso(monthEnd)],
-    queryFn: () => attFn({ data: { from: iso(monthStart), to: iso(monthEnd) } }),
+    queryKey: ["my-att", childId ?? "self", iso(monthStart), iso(monthEnd)],
+    queryFn: () => attFn({ data: { from: iso(monthStart), to: iso(monthEnd), ...scoped } }),
+    enabled: dataEnabled,
   });
-  const resQ = useQuery({ queryKey: ["my-res"], queryFn: () => resFn({ data: {} }) });
-  const hwQ = useQuery({ queryKey: ["my-hw"], queryFn: () => hwFn({ data: {} }) });
+  const resQ = useQuery({
+    queryKey: ["my-res", childId ?? "self"],
+    queryFn: () => resFn({ data: { ...scoped } }),
+    enabled: dataEnabled,
+  });
+  const hwQ = useQuery({
+    queryKey: ["my-hw", childId ?? "self"],
+    queryFn: () => hwFn({ data: { ...scoped } }),
+    enabled: dataEnabled,
+  });
 
   const byDate = useMemo(() => {
     const m = new Map<string, string>();
@@ -82,15 +105,37 @@ function StudentPortal() {
   while (cells.length % 7 !== 0) cells.push(null);
 
   const monthLabel = cursor.toLocaleString(undefined, { month: "long", year: "numeric" });
-  const info = infoQ.data;
-  const displayName = info?.full_name ?? me?.profile?.full_name ?? "Student";
+  const displayName = info?.full_name ?? (childId ? "Student" : me?.profile?.full_name ?? "Student");
   const classLabel = info?.class_name
     ? `${info.class_name}${info.class_section ? ` – ${info.class_section}` : ""}`
     : null;
 
+  if (denied) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <Card>
+          <CardHeader><CardTitle>Access denied</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              This student isn’t linked to your account, so you can’t view their profile.
+            </p>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/parent"><ArrowLeft className="h-4 w-4 mr-1" /> Back to Parent Portal</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="max-w-5xl mx-auto space-y-4">
+        {childId && (
+          <Button asChild variant="ghost" size="sm" className="-ml-2">
+            <Link to="/parent"><ArrowLeft className="h-4 w-4 mr-1" /> Back to Parent Portal</Link>
+          </Button>
+        )}
         {/* Profile header */}
         <Card>
           <CardContent className="p-4 flex items-center gap-4 flex-wrap">
