@@ -173,13 +173,17 @@ function AuthPage() {
   }
 
   async function onForgotPassword() {
+    // Password reset is always email-based, even when the person signed in by phone.
+    const target = resetEmail.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(target)) return toast.error("Enter a valid email");
     setBusy(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await supabase.auth.resetPasswordForEmail(target, {
       redirectTo: `${window.location.origin}/set-password`,
     });
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("Password reset link sent — check your email");
+    setShowForgot(false);
   }
 
   async function onSignup(values: z.infer<typeof signupSchema>) {
@@ -281,13 +285,15 @@ function AuthPage() {
               <div className="space-y-4">
                 <form onSubmit={onEmailSubmit} className="space-y-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">Email or phone number</Label>
                     <Input
                       id="email"
-                      type="email"
-                      autoComplete="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      type="text"
+                      inputMode="text"
+                      autoComplete="username"
+                      placeholder="you@school.com or 98XXXXXXXX"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={busy}>
@@ -304,7 +310,10 @@ function AuthPage() {
               </div>
             ) : step === "password" ? (
               <form onSubmit={onSignIn} className="space-y-3">
-                <p className="text-sm text-muted-foreground">{email}</p>
+                <p className="text-sm text-muted-foreground">
+                  {email}
+                  {usedPhone ? <span className="block text-xs">matched phone {usedPhone}</span> : null}
+                </p>
                 <div className="space-y-1.5">
                   <Label htmlFor="password">Password</Label>
                   <Input
@@ -320,16 +329,42 @@ function AuthPage() {
                 </Button>
                 <div className="flex items-center justify-between text-xs">
                   <button type="button" className="underline text-muted-foreground" onClick={resetToEmail}>
-                    Use a different email
+                    Use a different email or phone
                   </button>
-                  <button type="button" className="underline text-muted-foreground" onClick={onForgotPassword} disabled={busy}>
+                  <button
+                    type="button"
+                    className="underline text-muted-foreground"
+                    onClick={() => setShowForgot(true)}
+                    disabled={busy}
+                  >
                     Forgot password?
                   </button>
                 </div>
+                {showForgot && (
+                  <div className="space-y-1.5 rounded-md border border-border p-3">
+                    <Label htmlFor="reset-email">Email for the reset link</Label>
+                    <Input
+                      id="reset-email"
+                      type="email"
+                      autoComplete="email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Password resets are always sent by email, never by SMS.
+                    </p>
+                    <Button type="button" variant="outline" className="w-full" onClick={onForgotPassword} disabled={busy}>
+                      {busy ? "Please wait…" : "Send reset link"}
+                    </Button>
+                  </div>
+                )}
               </form>
             ) : (
               <form onSubmit={onCreatePassword} className="space-y-3">
-                <p className="text-sm text-muted-foreground">{email}</p>
+                <p className="text-sm text-muted-foreground">
+                  {email}
+                  {usedPhone ? <span className="block text-xs">matched phone {usedPhone}</span> : null}
+                </p>
                 <div className="space-y-1.5">
                   <Label htmlFor="new-pw">New password</Label>
                   <Input
@@ -354,7 +389,7 @@ function AuthPage() {
                   {busy ? "Please wait…" : "Set password & sign in"}
                 </Button>
                 <button type="button" className="underline text-xs text-muted-foreground" onClick={resetToEmail}>
-                  Use a different email
+                  Use a different email or phone
                 </button>
               </form>
             )}
