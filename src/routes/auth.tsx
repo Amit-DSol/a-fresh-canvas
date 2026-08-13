@@ -80,6 +80,10 @@ function AuthPage() {
 
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
+  const [usedPhone, setUsedPhone] = useState<string | null>(null);
+  const [showForgot, setShowForgot] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
 
@@ -98,20 +102,38 @@ function AuthPage() {
     setStep("email");
     setPw("");
     setPw2("");
+    setUsedPhone(null);
+    setShowForgot(false);
   }
 
   async function onEmailSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const value = email.trim().toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) return toast.error("Enter a valid email");
+    const value = identifier.trim();
+    const isEmail = value.includes("@");
+    if (isEmail) {
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) return toast.error("Enter a valid email");
+    } else if (value.replace(/\D+/g, "").length < 6) {
+      return toast.error("Enter a valid email or phone number");
+    }
     setBusy(true);
     try {
-      const res = await lookupFn({ data: { email: value } });
-      if (!res.exists) {
-        toast.error("No account found for this email — contact your school admin");
+      const res = await lookupFn({ data: { identifier: isEmail ? value.toLowerCase() : value } });
+      if (res.ambiguous) {
+        toast.error("This phone number matches multiple accounts, please log in with your email instead.");
         return;
       }
-      setEmail(value);
+      if (!res.exists) {
+        toast.error(
+          isEmail
+            ? "No account found for this email — contact your school admin"
+            : "No account found for this phone number — contact your school admin",
+        );
+        return;
+      }
+      const resolved = res.email ?? value.toLowerCase();
+      setEmail(resolved);
+      setResetEmail(resolved);
+      setUsedPhone(isEmail ? null : value);
       setStep(res.passwordSet ? "password" : "create");
     } catch (err: any) {
       toast.error(err?.message ?? "Something went wrong");
@@ -151,13 +173,17 @@ function AuthPage() {
   }
 
   async function onForgotPassword() {
+    // Password reset is always email-based, even when the person signed in by phone.
+    const target = resetEmail.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(target)) return toast.error("Enter a valid email");
     setBusy(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await supabase.auth.resetPasswordForEmail(target, {
       redirectTo: `${window.location.origin}/set-password`,
     });
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("Password reset link sent — check your email");
+    setShowForgot(false);
   }
 
   async function onSignup(values: z.infer<typeof signupSchema>) {
@@ -259,13 +285,15 @@ function AuthPage() {
               <div className="space-y-4">
                 <form onSubmit={onEmailSubmit} className="space-y-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">Email or phone number</Label>
                     <Input
                       id="email"
-                      type="email"
-                      autoComplete="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      type="text"
+                      inputMode="text"
+                      autoComplete="username"
+                      placeholder="you@school.com or 98XXXXXXXX"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={busy}>
@@ -282,7 +310,10 @@ function AuthPage() {
               </div>
             ) : step === "password" ? (
               <form onSubmit={onSignIn} className="space-y-3">
-                <p className="text-sm text-muted-foreground">{email}</p>
+                <p className="text-sm text-muted-foreground">
+                  {email}
+                  {usedPhone ? <span className="block text-xs">matched phone {usedPhone}</span> : null}
+                </p>
                 <div className="space-y-1.5">
                   <Label htmlFor="password">Password</Label>
                   <Input
@@ -298,16 +329,42 @@ function AuthPage() {
                 </Button>
                 <div className="flex items-center justify-between text-xs">
                   <button type="button" className="underline text-muted-foreground" onClick={resetToEmail}>
-                    Use a different email
+                    Use a different email or phone
                   </button>
-                  <button type="button" className="underline text-muted-foreground" onClick={onForgotPassword} disabled={busy}>
+                  <button
+                    type="button"
+                    className="underline text-muted-foreground"
+                    onClick={() => setShowForgot(true)}
+                    disabled={busy}
+                  >
                     Forgot password?
                   </button>
                 </div>
+                {showForgot && (
+                  <div className="space-y-1.5 rounded-md border border-border p-3">
+                    <Label htmlFor="reset-email">Email for the reset link</Label>
+                    <Input
+                      id="reset-email"
+                      type="email"
+                      autoComplete="email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Password resets are always sent by email, never by SMS.
+                    </p>
+                    <Button type="button" variant="outline" className="w-full" onClick={onForgotPassword} disabled={busy}>
+                      {busy ? "Please wait…" : "Send reset link"}
+                    </Button>
+                  </div>
+                )}
               </form>
             ) : (
               <form onSubmit={onCreatePassword} className="space-y-3">
-                <p className="text-sm text-muted-foreground">{email}</p>
+                <p className="text-sm text-muted-foreground">
+                  {email}
+                  {usedPhone ? <span className="block text-xs">matched phone {usedPhone}</span> : null}
+                </p>
                 <div className="space-y-1.5">
                   <Label htmlFor="new-pw">New password</Label>
                   <Input
@@ -332,7 +389,7 @@ function AuthPage() {
                   {busy ? "Please wait…" : "Set password & sign in"}
                 </Button>
                 <button type="button" className="underline text-xs text-muted-foreground" onClick={resetToEmail}>
-                  Use a different email
+                  Use a different email or phone
                 </button>
               </form>
             )}

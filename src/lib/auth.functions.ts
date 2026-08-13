@@ -103,21 +103,81 @@ export const getDashboardStats = createServerFn({ method: "GET" })
   });
 /* -------------------- UNIFIED LOGIN -------------------- */
 
-/** Public: does this email have an account, and has a password been set yet? */
+type LookupResult = {
+  exists: boolean;
+  passwordSet: boolean;
+  email?: string;
+  ambiguous?: boolean;
+};
+
+/** Last-10-digits form of a phone number, used for loose matching. */
+function phoneKey(value: string): string {
+  const digits = value.replace(/\D+/g, "");
+  return digits.length > 10 ? digits.slice(-10) : digits;
+}
+
+/**
+ * Public: does this identifier (email OR phone) have an account, and has a
+ * password been set yet? Phone is only a lookup convenience — there is no
+ * SMS verification, exactly like the unverified email lookup.
+ */
 export const lookupLogin = createServerFn({ method: "POST" })
-  .inputValidator((input: { email: string }) => ({
-    email: String(input.email ?? "").trim().toLowerCase(),
+  .inputValidator((input: { identifier?: string; email?: string }) => ({
+    identifier: String(input.identifier ?? input.email ?? "").trim(),
   }))
-  .handler(async ({ data }) => {
-    if (!data.email) return { exists: false, passwordSet: false };
+  .handler(async ({ data }): Promise<LookupResult> => {
+    const raw = data.identifier;
+    if (!raw) return { exists: false, passwordSet: false };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("password_set")
-      .eq("email", data.email)
-      .maybeSingle();
-    if (!profile) return { exists: false, passwordSet: false };
-    return { exists: true, passwordSet: !!profile.password_set };
+
+    if (raw.includes("@")) {
+      const email = raw.toLowerCase();
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("email, password_set")
+        .eq("email", email)
+        .maybeSingle();
+      if (!profile) return { exists: false, passwordSet: false };
+      return { exists: true, passwordSet: !!profile.password_set, email: profile.email };
+    }
+
+    const key = phoneKey(raw);
+    if (key.length < 6) return { exists: false, passwordSet: false };
+
+    // Staff/teachers store their phone on the profile; guardians also have a
+    // phone on their student_guardians link row.
+    const [profRes, guardRes] = await Promise.all([
+      supabaseAdmin.from("profiles").select("id, email, phone, password_set").not("phone", "is", null),
+      supabaseAdmin.from("student_guardians").select("parent_profile_id, phone").not("phone", "is", null),
+    ]);
+
+    const profiles = profRes.data ?? [];
+    const matchedIds = new Set<string>();
+    for (const p of profiles) {
+      if (p.phone && phoneKey(p.phone) === key) matchedIds.add(p.id);
+    }
+    for (const g of guardRes.data ?? []) {
+      if (g.phone && phoneKey(g.phone) === key && g.parent_profile_id) {
+        matchedIds.add(g.parent_profile_id);
+      }
+    }
+
+    if (matchedIds.size === 0) return { exists: false, passwordSet: false };
+    if (matchedIds.size > 1) return { exists: false, passwordSet: false, ambiguous: true };
+
+    const id = [...matchedIds][0]!;
+    const known = profiles.find((p) => p.id === id);
+    const account =
+      known ??
+      (
+        await supabaseAdmin
+          .from("profiles")
+          .select("id, email, phone, password_set")
+          .eq("id", id)
+          .maybeSingle()
+      ).data;
+    if (!account?.email) return { exists: false, passwordSet: false };
+    return { exists: true, passwordSet: !!account.password_set, email: account.email };
   });
 
 /** Public: first-ever login — set the account password. Only when password_set is false. */
