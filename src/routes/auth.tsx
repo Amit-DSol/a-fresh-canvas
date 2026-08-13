@@ -80,6 +80,10 @@ function AuthPage() {
 
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
+  const [usedPhone, setUsedPhone] = useState<string | null>(null);
+  const [showForgot, setShowForgot] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
 
@@ -98,20 +102,38 @@ function AuthPage() {
     setStep("email");
     setPw("");
     setPw2("");
+    setUsedPhone(null);
+    setShowForgot(false);
   }
 
   async function onEmailSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const value = email.trim().toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) return toast.error("Enter a valid email");
+    const value = identifier.trim();
+    const isEmail = value.includes("@");
+    if (isEmail) {
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) return toast.error("Enter a valid email");
+    } else if (value.replace(/\D+/g, "").length < 6) {
+      return toast.error("Enter a valid email or phone number");
+    }
     setBusy(true);
     try {
-      const res = await lookupFn({ data: { email: value } });
-      if (!res.exists) {
-        toast.error("No account found for this email — contact your school admin");
+      const res = await lookupFn({ data: { identifier: isEmail ? value.toLowerCase() : value } });
+      if (res.ambiguous) {
+        toast.error("This phone number matches multiple accounts, please log in with your email instead.");
         return;
       }
-      setEmail(value);
+      if (!res.exists) {
+        toast.error(
+          isEmail
+            ? "No account found for this email — contact your school admin"
+            : "No account found for this phone number — contact your school admin",
+        );
+        return;
+      }
+      const resolved = res.email ?? value.toLowerCase();
+      setEmail(resolved);
+      setResetEmail(resolved);
+      setUsedPhone(isEmail ? null : value);
       setStep(res.passwordSet ? "password" : "create");
     } catch (err: any) {
       toast.error(err?.message ?? "Something went wrong");
