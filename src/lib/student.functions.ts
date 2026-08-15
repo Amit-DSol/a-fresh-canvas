@@ -59,6 +59,7 @@ export const myStudentInfo = createServerFn({ method: "GET" })
       roll_number: student.roll_number,
       admission_number: student.admission_number,
       full_name: student.profile?.full_name ?? "—",
+      class_id: student.class_id ?? null,
       class_name: student.classes?.name ?? null,
       class_section: student.classes?.section ?? null,
       class_teacher: classTeacher,
