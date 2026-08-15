@@ -11,6 +11,8 @@ import { myAttendance } from "@/lib/attendance.functions";
 import { myResults } from "@/lib/exams.functions";
 import { myClassHomework } from "@/lib/homework.functions";
 import { myStudentInfo } from "@/lib/student.functions";
+import { listTimetable } from "@/lib/timetable.functions";
+import { listExamSchedule } from "@/lib/exams.functions";
 import { useMe } from "@/hooks/use-me";
 
 export const Route = createFileRoute("/_authenticated/student")({
@@ -26,6 +28,14 @@ function iso(d: Date) {
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase() ?? "").join("") || "?";
 }
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+function fmtTime(t?: string | null) {
+  if (!t) return null;
+  const [h, m] = t.split(":");
+  const hh = Number(h);
+  const ampm = hh >= 12 ? "PM" : "AM";
+  return `${((hh + 11) % 12) + 1}:${m} ${ampm}`;
+}
 
 function StudentPortal() {
   const { data: me } = useMe();
@@ -34,6 +44,8 @@ function StudentPortal() {
   const attFn = useServerFn(myAttendance);
   const resFn = useServerFn(myResults);
   const hwFn = useServerFn(myClassHomework);
+  const ttFn = useServerFn(listTimetable);
+  const examFn = useServerFn(listExamSchedule);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const infoQ = useQuery({
@@ -68,6 +80,27 @@ function StudentPortal() {
     queryFn: () => hwFn({ data: { ...scoped } }),
     enabled: dataEnabled,
   });
+
+  const classId: string | undefined = info?.class_id ?? undefined;
+  const ttQ = useQuery({
+    queryKey: ["my-timetable", classId],
+    queryFn: () => ttFn({ data: { class_id: classId! } }),
+    enabled: !!classId,
+  });
+  const examQ = useQuery({
+    queryKey: ["my-exam-schedule", classId],
+    queryFn: () => examFn({ data: { class_id: classId! } }),
+    enabled: !!classId,
+  });
+  const timetableByDay = useMemo(() => {
+    const m = new Map<number, any[]>();
+    (ttQ.data ?? []).forEach((r: any) => {
+      const list = m.get(r.day_of_week) ?? [];
+      list.push(r);
+      m.set(r.day_of_week, list);
+    });
+    return m;
+  }, [ttQ.data]);
 
   const byDate = useMemo(() => {
     const m = new Map<string, string>();
@@ -258,6 +291,68 @@ function StudentPortal() {
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-500 inline-block" /> Late</span>
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-400 inline-block" /> Holiday</span>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Weekly Timetable</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            {!classId && <div className="text-sm text-muted-foreground">No class assigned yet.</div>}
+            {classId && (ttQ.data ?? []).length === 0 && (
+              <div className="text-sm text-muted-foreground">No timetable published for this class yet.</div>
+            )}
+            {[1, 2, 3, 4, 5, 6].map((day) => {
+              const periods = timetableByDay.get(day) ?? [];
+              if (!periods.length) return null;
+              return (
+                <div key={day}>
+                  <div className="text-sm font-medium mb-1">{DAYS[day]}</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                    {periods.map((p: any) => (
+                      <div key={p.id} className="flex items-center justify-between gap-2 border rounded-md px-2 py-1 text-sm">
+                        <span className="text-xs text-muted-foreground w-14 shrink-0">P{p.period_number}</span>
+                        <span className="flex-1 truncate">{p.subjects?.name ?? "—"}</span>
+                        <span className="text-xs text-muted-foreground truncate max-w-[45%] text-right">
+                          {p.teachers?.profile?.full_name ?? ""}
+                          {fmtTime(p.start_time) && ` · ${fmtTime(p.start_time)}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Upcoming Exams</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {(!classId || (examQ.data ?? []).length === 0) && (
+              <div className="text-sm text-muted-foreground">No upcoming exams scheduled.</div>
+            )}
+            {(examQ.data ?? []).map((ex: any) => (
+              <div key={ex.id} className="border rounded-md p-3">
+                <div className="font-medium text-sm mb-2">
+                  {ex.name}
+                  <Badge variant="secondary" className="ml-2">
+                    {formatDate(ex.starts_on)}{ex.ends_on !== ex.starts_on && ` – ${formatDate(ex.ends_on)}`}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  {ex.exam_papers.map((p: any) => (
+                    <div key={p.id} className="flex flex-wrap items-center justify-between gap-x-3 text-sm">
+                      <span>{p.subjects?.name ?? "—"}</span>
+                      <span className="text-muted-foreground text-xs">
+                        {formatDate(p.paper_date)}
+                        {fmtTime(p.start_time) && ` · ${fmtTime(p.start_time)}${fmtTime(p.end_time) ? `–${fmtTime(p.end_time)}` : ""}`}
+                        {p.room && ` · Room ${p.room}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </CardContent>
         </Card>
       </div>
