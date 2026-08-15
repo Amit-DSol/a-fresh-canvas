@@ -293,6 +293,68 @@ function StudentPortal() {
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Weekly Timetable</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            {!classId && <div className="text-sm text-muted-foreground">No class assigned yet.</div>}
+            {classId && (ttQ.data ?? []).length === 0 && (
+              <div className="text-sm text-muted-foreground">No timetable published for this class yet.</div>
+            )}
+            {[1, 2, 3, 4, 5, 6].map((day) => {
+              const periods = timetableByDay.get(day) ?? [];
+              if (!periods.length) return null;
+              return (
+                <div key={day}>
+                  <div className="text-sm font-medium mb-1">{DAYS[day]}</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                    {periods.map((p: any) => (
+                      <div key={p.id} className="flex items-center justify-between gap-2 border rounded-md px-2 py-1 text-sm">
+                        <span className="text-xs text-muted-foreground w-14 shrink-0">P{p.period_number}</span>
+                        <span className="flex-1 truncate">{p.subjects?.name ?? "—"}</span>
+                        <span className="text-xs text-muted-foreground truncate max-w-[45%] text-right">
+                          {p.teachers?.profile?.full_name ?? ""}
+                          {fmtTime(p.start_time) && ` · ${fmtTime(p.start_time)}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Upcoming Exams</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {(!classId || (examQ.data ?? []).length === 0) && (
+              <div className="text-sm text-muted-foreground">No upcoming exams scheduled.</div>
+            )}
+            {(examQ.data ?? []).map((ex: any) => (
+              <div key={ex.id} className="border rounded-md p-3">
+                <div className="font-medium text-sm mb-2">
+                  {ex.name}
+                  <Badge variant="secondary" className="ml-2">
+                    {formatDate(ex.starts_on)}{ex.ends_on !== ex.starts_on && ` – ${formatDate(ex.ends_on)}`}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  {ex.exam_papers.map((p: any) => (
+                    <div key={p.id} className="flex flex-wrap items-center justify-between gap-x-3 text-sm">
+                      <span>{p.subjects?.name ?? "—"}</span>
+                      <span className="text-muted-foreground text-xs">
+                        {formatDate(p.paper_date)}
+                        {fmtTime(p.start_time) && ` · ${fmtTime(p.start_time)}${fmtTime(p.end_time) ? `–${fmtTime(p.end_time)}` : ""}`}
+                        {p.room && ` · Room ${p.room}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     </>
   );
