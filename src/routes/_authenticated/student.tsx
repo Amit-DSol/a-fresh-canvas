@@ -11,6 +11,8 @@ import { myAttendance } from "@/lib/attendance.functions";
 import { myResults } from "@/lib/exams.functions";
 import { myClassHomework } from "@/lib/homework.functions";
 import { myStudentInfo } from "@/lib/student.functions";
+import { listTimetable } from "@/lib/timetable.functions";
+import { listExamSchedule } from "@/lib/exams.functions";
 import { useMe } from "@/hooks/use-me";
 
 export const Route = createFileRoute("/_authenticated/student")({
@@ -26,6 +28,14 @@ function iso(d: Date) {
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase() ?? "").join("") || "?";
 }
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+function fmtTime(t?: string | null) {
+  if (!t) return null;
+  const [h, m] = t.split(":");
+  const hh = Number(h);
+  const ampm = hh >= 12 ? "PM" : "AM";
+  return `${((hh + 11) % 12) + 1}:${m} ${ampm}`;
+}
 
 function StudentPortal() {
   const { data: me } = useMe();
@@ -34,6 +44,8 @@ function StudentPortal() {
   const attFn = useServerFn(myAttendance);
   const resFn = useServerFn(myResults);
   const hwFn = useServerFn(myClassHomework);
+  const ttFn = useServerFn(listTimetable);
+  const examFn = useServerFn(listExamSchedule);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const infoQ = useQuery({
@@ -68,6 +80,27 @@ function StudentPortal() {
     queryFn: () => hwFn({ data: { ...scoped } }),
     enabled: dataEnabled,
   });
+
+  const classId: string | undefined = info?.class_id ?? undefined;
+  const ttQ = useQuery({
+    queryKey: ["my-timetable", classId],
+    queryFn: () => ttFn({ data: { class_id: classId! } }),
+    enabled: !!classId,
+  });
+  const examQ = useQuery({
+    queryKey: ["my-exam-schedule", classId],
+    queryFn: () => examFn({ data: { class_id: classId! } }),
+    enabled: !!classId,
+  });
+  const timetableByDay = useMemo(() => {
+    const m = new Map<number, any[]>();
+    (ttQ.data ?? []).forEach((r: any) => {
+      const list = m.get(r.day_of_week) ?? [];
+      list.push(r);
+      m.set(r.day_of_week, list);
+    });
+    return m;
+  }, [ttQ.data]);
 
   const byDate = useMemo(() => {
     const m = new Map<string, string>();
