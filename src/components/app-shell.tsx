@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   School,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -37,6 +38,7 @@ const NAV: NavItem[] = [
   { to: "/timetable", label: "Timetable", icon: Calendar, roles: ["admin", "coordinator", "teacher"] },
   { to: "/homework", label: "Homework", icon: BookOpen, roles: ["admin", "coordinator", "teacher"] },
   { to: "/notices", label: "Notices", icon: Megaphone, roles: ["admin", "coordinator", "teacher"] },
+  { to: "/analytics", label: "Analytics", icon: BarChart3, roles: ["admin", "coordinator", "teacher"] },
   { to: "/messages", label: "Messages", icon: MessageSquare, roles: ["admin", "coordinator", "teacher"] },
   { to: "/settings", label: "Settings", icon: Settings, roles: ["admin"] },
 ];
