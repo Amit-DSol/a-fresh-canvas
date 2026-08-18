@@ -5,7 +5,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CalendarCheck, ClipboardList, Calendar, BookOpen, MessageSquare, School } from "lucide-react";
-import { bootstrapMe, getSchoolSettings } from "@/lib/auth.functions";
+import { bootstrapMe, getMe, getSchoolSettings } from "@/lib/auth.functions";
+import { homeRouteFor } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect } from "react";
 
@@ -28,6 +29,7 @@ export const Route = createFileRoute("/")({
 function Index() {
   const navigate = useNavigate();
   const bootstrapFn = useServerFn(bootstrapMe);
+  const meFn = useServerFn(getMe);
   const schoolFn = useServerFn(getSchoolSettings);
   const { data: school } = useQuery({ queryKey: ["school"], queryFn: () => schoolFn() });
   const name = school?.name ?? "Your School";
@@ -38,13 +40,14 @@ function Index() {
     supabase.auth.getSession().then(async ({ data }) => {
       if (cancelled || !data.session) return;
       await bootstrapFn();
-      if (!cancelled) navigate({ to: "/dashboard", replace: true });
+      const me = await meFn();
+      if (!cancelled) navigate({ to: homeRouteFor(me?.role ?? null), replace: true });
     });
 
     return () => {
       cancelled = true;
     };
-  }, [bootstrapFn, navigate]);
+  }, [bootstrapFn, meFn, navigate]);
 
   const features = [
     { icon: CalendarCheck, title: "Attendance tracking", body: "Daily attendance with parent and student visibility." },
