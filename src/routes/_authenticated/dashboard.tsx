@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMe } from "@/hooks/use-me";
 import { getSchoolSettings, getDashboardStats } from "@/lib/auth.functions";
+import { homeRouteFor } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -16,13 +17,27 @@ function Dashboard() {
   const getFn = useServerFn(getSchoolSettings);
   const { data: school } = useQuery({ queryKey: ["school"], queryFn: () => getFn() });
   const statsFn = useServerFn(getDashboardStats);
-  const { data: stats } = useQuery({ queryKey: ["dashboard-stats"], queryFn: () => statsFn() });
+  const isStaff = me?.role === "admin" || me?.role === "coordinator" || me?.role === "teacher";
+  const { data: stats } = useQuery({
+    queryKey: ["dashboard-stats"],
+    queryFn: () => statsFn(),
+    enabled: isStaff,
+  });
+
+  // Parents and students have their own home pages — never show them staff stats.
+  useEffect(() => {
+    if (me && !isStaff) {
+      navigate({ to: homeRouteFor(me.role), replace: true });
+    }
+  }, [me, isStaff, navigate]);
 
   useEffect(() => {
     if (me?.role === "admin" && school && !school.onboarding_complete) {
       navigate({ to: "/onboarding", replace: true });
     }
   }, [me, school, navigate]);
+
+  if (me && !isStaff) return null;
 
   return (
     <div className="space-y-6">
